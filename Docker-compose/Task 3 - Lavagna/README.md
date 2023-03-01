@@ -11,7 +11,7 @@ Before starting, ensure that you have the following installed on your machine:
 # Build and Run
 1. Clone the repository.
 
-2. Build the Docker image + nginx and MYSQL data base for Lavagna with the following command:
+2. Build the Docker image for Lavagna with the following command:
 
 ```bash
 bash init.sh
