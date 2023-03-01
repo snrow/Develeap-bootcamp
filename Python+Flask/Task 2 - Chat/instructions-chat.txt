@@ -1,0 +1,47 @@
+Chat
+----
+The goal is to write a back end chat service using Flask.
+A simple HTML/JS front end client that uses the service is provided (no changed should be made to this - it's "owned by the front end team").
+
+What is the Chat service?
+The service exposes three apis:
+1. `GET /<room>` - Will return the static HTML (provided to you), regardless of the room provided.
+2. `POST /chat/<room>` - Accepts a chat line from a user:
+   - Will accept 2 form fields - username & message.
+   - Will save date, time, username & message per room.
+3. `GET /chat/<room>` - Returns the full chat in a room:
+   - Chat formatted as a list of "\n" delimited lines (1 per message).
+   - Each line formatted according to the example: "[2018-02-25 14:00:51] omri: hi everybody!"
+
+
+Following is a recommendation on implementation order.
+Enjoy, and feel free to ask any question.
+Once done - go to the bonus devops section.
+
+1. Implement Flask app that returns the static HTML on `GET /`. Check it.
+2. Add `GET /<room>`. No difference.
+3. Implement `GET /chat/<room>`, and test it with data you created manually (for instance, if you save the room data in a file - just manually create a mock file).
+4. Implement `POST /chat/<room>`. Check in multiple rooms and multiple browsers.
+
+
+Optional/Bonus goals
+--------------------
+- Replace the file based storage with a Dockerized MySQL database.
+- Package chat server as Docker image.
+- Create docker-compose topology comprising of:
+  - 3 chat replicas.
+  - Nginx container configured to load balance the 3 containers and expose them on port 80. 
+    Note: You do not need to expose ports for any of the 3 servers; only for Nginx!
+  Test and demonstrate that:
+  - You are accessing all 3 containers (by using the UI to display the server hostname).
+  - A chat message sent to one container is visible via the other containers.
+  Make this work with arbitrary scaling, i.e. 1 Nginx and several chat servers as defined by docker-compose "scale" parameter.
+  You can read about Nginx load balancing at:
+  - https://docs.nginx.com/nginx/admin-guide/load-balancer/http-load-balancer/
+  - https://www.nginx.com/resources/wiki/start/topics/examples/loadbalanceexample/
+
+
+To hand in
+----------
+Please submit a `chat.zip` file, containing a directory `chat/` in which your script can be found and directly ran from!
+
