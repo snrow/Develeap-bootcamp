@@ -1,6 +1,7 @@
 # Lavagna Project
 This project is based on https://github.com/digitalfondue/lavagna and is intended to be run as Docker containers using docker-compose.
 
+`You can see the mission requirement in the instruction-lavagna.txt file`
 # Prerequisites
 Before starting, ensure that you have the following installed on your machine:
 
@@ -26,3 +27,4 @@ bash init.sh
 - If you want to run Lavagna without Docker, you can follow the instructions in the project/README.md file.
 
 That's it! With these instructions, you should be able to build and run Lavagna with Docker.
+
