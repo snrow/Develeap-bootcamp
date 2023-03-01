@@ -1,0 +1,52 @@
+
+version: '3.8'
+
+volumes:
+  db_vol:
+  nginx_static:
+
+networks: 
+  lavagna_network: 
+    driver: bridge
+
+services:
+  db:
+    image: mysql:5.7
+    container_name: mysql
+    hostname: mysql
+    environment:
+      - MYSQL_DATABASE=lavagna
+      - MYSQL_ROOT_PASSWORD=1234
+      - MYSQL_USER=user
+      - MYSQL_PASSWORD=user
+    volumes:
+      - db_vol:/var/lib/mysql
+    networks: 
+      - lavagna_network
+    healthcheck:
+      test: ["CMD", "mysqladmin", "--password=1234" ,"ping", "-h", "localhost"]
+      timeout: 20s
+      retries: 5
+
+  app:
+    build: .
+    container_name: lavagna2
+    hostname: lavagna
+    networks: 
+      - lavagna_network
+    depends_on:
+      db: 
+        condition: service_healthy
+    volumes:
+      - nginx_static:/project/src/main/webapp
+  nginx:
+    image: nginx:stable
+    container_name: lavagna_nginx
+    volumes:
+      - nginx_static:/static/
+    ports:
+      - 80:80
+    networks: 
+      - lavagna_network
+    depends_on:
+      - app

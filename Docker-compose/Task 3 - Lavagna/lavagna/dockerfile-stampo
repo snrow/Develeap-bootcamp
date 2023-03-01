@@ -1,0 +1,10 @@
+FROM maven:3.8.6-openjdk-8 AS stampo
+COPY ./project /project
+WORKDIR /project
+RUN mvn clean stampo:build
+ENTRYPOINT [ "mvn" ,"stampo:serve" ]
+
+# FROM nginx:stable
+# COPY --from=stampo /project/target /target
+# WORKDIR /target
+# RUN

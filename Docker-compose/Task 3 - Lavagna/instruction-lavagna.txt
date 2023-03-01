@@ -10,7 +10,6 @@ Lavagna
    2.b. Fat docker - create a Dockerfile based on a maven docker image:
         - COPY sources in.
         - Build.
-        - Create an entrypoint that executes Lavagna.
    Notes:
    - You can use `demo.Dockerfile` as a reference BUT:
      - DO NOT wget the distribution (as this file does)! You MUST build the image yourself using maven.
@@ -40,8 +39,6 @@ Lavagna
 
 6. Thin docker - create a Dockerfile based on a maven docker image and use multi-stage docker to create an alpine JRE based lavagna image. 
    - Note the difference in image size between step 2.b. and step 6.
-
-7. Add another server, running in it's own container, which serves documentation on port 8081. Additional instructions are in the readme.
 
 ---
 
