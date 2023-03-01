@@ -8,7 +8,7 @@ To access and run any of the projects or missions in this repository, you can si
 
 - Clone the repository
 ```bash
-git clone https://github.com/your-username/Develeap-bootcamp.git
+git clone https://github.com/snrow/Develeap-bootcamp.git
 ```
 
 Once you have cloned the repository, you can navigate to any project or mission directory and follow the instructions in the corresponding README.md file to run the project or complete the mission.
