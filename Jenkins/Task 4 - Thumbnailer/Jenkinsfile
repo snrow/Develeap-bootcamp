@@ -1,0 +1,59 @@
+pipeline {
+	agent any
+
+	tools {
+		maven 'maven-3.6.2'
+		jdk 'jdk-8' }
+
+	options {
+		skipDefaultCheckout(true) // This is required if you want to clean before build
+		skipStagesAfterUnstable()
+		timestamps()
+		timeout(10)
+		gitLabConnection('Gitlab')}
+	triggers {gitlab(triggerOnPush:true, branchFilterType:'All')}
+
+
+    stages {
+        stage('Clone Repository') {
+            steps {
+            	// Clean before build
+                cleanWs()
+                echo "================> Cloning Repo for Gitlab <================"
+                checkout scm
+                echo "================> Cloning Complete! <================"}
+        }
+
+		stage('Build') {
+			expression {"${env.gitlabBranch}" == 'origin/main'}
+			steps {
+				echo "================> Building Image <================"
+				script{ dir("thumbnailer/app") { sh "mvn install" } }
+				echo "================> Building Complete! <================" }
+			options {
+				warnError("[-] Failed to build image.")
+				retry(conditions: [agent()], count: 3) }
+		}
+	}
+
+	post {
+	    // Clean after build
+	    always {
+            cleanWs(cleanWhenNotBuilt: true,
+                    deleteDirs: true,
+                    disableDeferredWipeout: false,
+                    notFailBuild: true,
+                    patterns: [[pattern: '.gitignore', type: 'INCLUDE'],
+                               [pattern: '.propsfile', type: 'EXCLUDE']])
+        }
+        success {
+        	emailext(subject: "SUCCESSFUL: Job '${env.JOB_NAME} [${env.BUILD_NUMBER}]'",
+      				body: """<p>SUCCESSFUL: Job '${env.JOB_NAME} [${env.BUILD_NUMBER}]':</p>
+        			<p>Check console output at &QUOT;<a href='${env.BUILD_URL}'>${env.JOB_NAME} [${env.BUILD_NUMBER}]</a>&QUOT;</p>""",
+      				recipientProviders: [[$class: 'DevelopersRecipientProvider']])
+        }
+        failure {
+        	emailext(subject: "FAILED: Job '${env.JOB_NAME} [${env.BUILD_NUMBER}]'",
+      				body: """<p>FAILED: Job '${env.JOB_NAME} [${env.BUILD_NUMBER}]':</p>
+        			<p>Check console output at &QUOT;<a href='${env.BUILD_URL}'>${env.JOB_NAME} [${env.BUILD_NUMBER}]</a>&QUOT;</p>""",
+      				recipientProviders: [[$class: 'DevelopersRecipientProvider']])

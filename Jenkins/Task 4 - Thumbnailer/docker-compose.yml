@@ -1,0 +1,60 @@
+version: '3.8'
+
+volumes:
+  jenkins-data:
+  m2cach:
+  jm2cach:
+  artifactory_vol:
+  jenkins_configuration:
+
+networks: 
+  ci_network: 
+    driver: bridge
+
+services:
+  jenkins:
+    container_name: jenkins
+    build: 
+      context: .
+      dockerfile: jenkins_dockerfile
+    image: img_jenkins
+    restart: always
+    ports:
+      - "8080:8080"
+      - "50000:50000"
+    volumes:
+      - jenkins_configuration:/var/jenkins_home
+      - /var/run/docker.sock:/var/run/docker.sock
+
+    privileged: true
+    networks:
+      - ci_network
+    depends_on:
+        - gitlab
+
+  gitlab:
+    image: gitlab/gitlab-ce
+    container_name: gitlab
+    restart: always
+    ports:
+        - "80:80"
+        - "443:443"
+        - "22:22"
+    volumes:
+      - /home/Eliran/Desktop/develeap/gitlab/config:/etc/gitlab
+      - /home/Eliran/Desktop/develeap/gitlab/logs:/var/log/gitlab
+      - /home/Eliran/Desktop/develeap/gitlab/data:/var/opt/gitlab
+    shm_size: '256m'
+    networks:
+      - ci_network
+
+  artifactory:
+    image: docker.bintray.io/jfrog/artifactory-oss:6.16.0
+    container_name: artifactory
+    ports:
+      - 8081:8081
+    networks:
+      - ci_network
+    volumes:
+      - artifactory_vol:/var/opt/jfrog/artifactory
+
