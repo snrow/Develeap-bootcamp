@@ -1,0 +1,23 @@
+version: '3.8'
+services:
+  nginx:
+    image: nginx:1.23.3
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf #trasnfer our nginx.conf file to the place where the nginx expect to find the configuration file
+      - ./app/src/main/resources/static/:/var/www/static/ #trasnfer our static files to the place where the nginx expect to find them 
+# transferring your app's static files to nginx can help improve the performance and scalability of your app, making it more efficient and faster for users to access
+    ports:
+      - 80:80
+    networks:
+      - Eliran-ted-search
+
+  ted-search:
+    container_name: app-ted-search
+    image: ted-search:1.1-SNAPSHOT
+    ports:
+      - 9191:9191
+    networks:
+      - Eliran-ted-search
+
+networks:
+  Eliran-ted-search:

@@ -1,0 +1,166 @@
+def EC2_IP
+pipeline {
+	agent any
+	options {
+		gitLabConnection('Gitlab')
+        skipDefaultCheckout(true)	// This is required if you want to clean before build
+        skipStagesAfterUnstable()
+        timestamps()
+        timeout(10) }
+	tools {
+		maven 'maven-3.6.2'
+		jdk 'jdk-8'
+		terraform 'Terraform' }
+
+    triggers {
+    	gitlab(triggerOnPush:true, branchFilterType:'All')
+    }
+
+    stages {
+        stage('Clone Repository') {
+            steps {
+            	// Clean before build
+                cleanWs()
+                echo " Cloning Repo for Gitlab "
+                checkout scm
+                echo " Cloning Complete! "
+				sh "env | sort"
+            }
+        }
+
+		stage('Compile & Verify') { // Compile & verify evrything
+			steps {
+				echo " Compiling and Verifing Project "
+				script { dir("app") { sh 'mvn verify' } }
+				echo " Compiling and Verifing Complete! "}
+			options { warnError("[-] Failed to verify project.") }
+		}
+
+		stage('Push') { // Compile & verify evrything
+			when { expression { BRANCH_NAME ==~ 'main' } }
+			steps { // #test found
+				echo " Pushing current image to ECR "
+				script { docker.withRegistry('425081300547.dkr.ecr.eu-west-2.amazonaws.com','ecr:eu-west-2:aws-credentials') { docker.image('ted-search').push() } }
+				echo " Pushing Complete! "}
+			options { warnError("[-] Failed to push current docker image to ECR.") }
+		}
+
+		stage('Provision') {
+			when { anyOf {
+					expression { BRANCH_NAME ==~ 'main' }
+					expression { changelog ".*#test.*" }
+					expression { Ise2e() } } }
+			steps {
+				echo " Setting up Testing environment... "
+				script { dir("./terraform") { withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'aws-credentials', usernameVariable: 'AWS_ACCESS_KEY_ID', passwordVariable: 'AWS_SECRET_ACCESS_KEY']]) {
+ 					sh """
+ 							export AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+ 							export AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+							terraform init -no-color """
+
+					if (BRANCH_NAME ==~ 'main'){
+ 						sh """
+ 							export AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+ 							export AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+							terraform workspace select PRODUCTION || terraform workspace new PRODUCTION
+							terraform apply -var-file='./vars/prod.tfvars' -auto-approve -no-color""" }
+					else {
+						def Uniq = sh(returnStdout:true, script: """git log -1 | head -n1 | cut -d' ' -f2""").trim().take(8)
+ 						sh """
+ 							export AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+ 							export AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+							terraform workspace new TESTING-${Uniq}
+							terraform apply -var-file='./vars/test.tfvars' -auto-approve -no-color""" }
+
+					EC2_IP = sh(returnStdout: true, script: """
+						export AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+						export AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+						terraform output EC2_IP | cut -d'"' -f2""").trim()
+					echo EC2_IP	} } }
+				echo " Setup Complete! " }
+			options { warnError("[-] Failed to Set up EC2 for testing in AWS..") }
+		}
+
+		stage('Prepare') {
+			when { anyOf {
+					expression { BRANCH_NAME ==~ 'main' }
+					expression { changelog ".*#test.*" }
+					expression { Ise2e() } } }
+			steps {
+				echo " Preparing Testing environment v2... "
+				script { dir("./terraform"){
+					sshagent(['TED_Search_TESTENV']) {
+						sh """ssh -o 'StrictHostKeyChecking no' ubuntu@${EC2_IP} 'docker ps | grep "ted_search" | cut -d" " -f1 | xargs docker rm -f 2>/dev/null || echo '=== Ready to go! ===''"""
+						sh """ssh -o 'StrictHostKeyChecking no' ubuntu@${EC2_IP} 'docker images | grep "ted-search" | tr -s " " | cut -d" " -f3 | xargs docker rmi -f 2>/dev/null || echo '=== Ready to go! ===''"""
+						sh """ssh -o 'StrictHostKeyChecking no' ubuntu@${EC2_IP} 'cd /tmp/TED_Search; aws ecr get-login-password --region eu-west-2 | docker login --username AWS --password-stdin 644435390668.dkr.ecr.eu-west-2.amazonaws.com; aws ecr get-login-password --region eu-west-2 | docker pull 644435390668.dkr.ecr.eu-west-2.amazonaws.com/ted-search ;docker-compose up -d'""" } } }
+				echo " Preparation Complete! " }
+			options { warnError("[-] Failed to Set up EC2 for testing in AWS..") }
+		}
+
+		stage('Test') {
+			when { anyOf {
+					expression { BRANCH_NAME ==~ 'main' }
+					expression { changelog ".*#test.*" }
+					expression { Ise2e() } } }
+			steps {
+				echo " Testing Current Build "
+				script { sh "bash ./e2e.sh ${EC2_IP} 80" }
+				echo " Testing Complete! " }
+			options {
+				warnError("[-] Testing failed.")
+				retry(conditions: [agent()], count: 3) }
+		}
+
+		stage('Destroy') {
+			when {
+				allOf {
+					not{ expression{ BRANCH_NAME ==~ 'main' } }
+					anyOf {
+						expression { changelog ".*#test.*" }
+						expression { Ise2e() } } } }
+			steps {
+				echo " Destroying Testing Environment "
+				script { dir("./terraform") { withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'aws-credentials', usernameVariable: 'AWS_ACCESS_KEY_ID', passwordVariable: 'AWS_SECRET_ACCESS_KEY']]) {
+ 					sh """	export AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+ 							export AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+ 							terraform destroy -var-file='./vars/test.tfvars' -auto-approve -no-color"""} } }
+				echo " Destroy Complete! " }
+			options {
+				warnError("[-] Failed to Deploy Artifact.")
+				retry(conditions: [agent()], count: 3) }
+		}
+	}
+
+	post {
+        // Clean after build
+        always {
+            cleanWs(cleanWhenNotBuilt: true,
+                    deleteDirs: true,
+                    disableDeferredWipeout: false,
+                    notFailBuild: true,
+                    patterns: [[pattern: '.gitignore', type: 'INCLUDE'],
+                               [pattern: '.propsfile', type: 'EXCLUDE']]) }
+        success {
+        	emailext(subject: "SUCCESSFUL: Job '${env.JOB_NAME} [${env.BUILD_NUMBER}]'",
+      				body: """<p>SUCCESSFUL: Job '${env.JOB_NAME} [${env.BUILD_NUMBER}]':</p>
+        			<p>Check console output at &QUOT;<a href='${env.BUILD_URL}'>${env.JOB_NAME} [${env.BUILD_NUMBER}]</a>&QUOT;</p>""",
+      				recipientProviders: [[$class: 'DevelopersRecipientProvider']])}
+        failure {
+        	emailext(subject: "FAILED: Job '${env.JOB_NAME} [${env.BUILD_NUMBER}]'",
+      				body: """<p>FAILED: Job '${env.JOB_NAME} [${env.BUILD_NUMBER}]':</p>
+        			<p>Check console output at &QUOT;<a href='${env.BUILD_URL}'>${env.JOB_NAME} [${env.BUILD_NUMBER}]</a>&QUOT;</p>""",
+      				recipientProviders: [[$class: 'DevelopersRecipientProvider']])}
+    }
+}
+
+//Checks for e2e in commit message
+private boolean Ise2e() {
+    lastCommit = sh([script: 'git log -1', returnStdout: true])
+    if (lastCommit =~ "#test") {
+        return true
+    } else {
+    	echo "False"
+    	echo lastCommit
+        return false
+    }
+}
